@@ -20,19 +20,18 @@ async def on_chat_start():
         "You are a hospital assistant. "
         "When asked about patient information, use the 'generate_patient' tool to retrieve patient records. "
     )
-
     llm_with_tools = llm.bind_tools([generate_patient]).with_config({
         "system_message": system_instruction
     })
 
     cl.user_session.set("llm", llm_with_tools)
 
-
 @cl.on_message
 async def on_message(message: cl.Message):
     llm = cl.user_session.get("llm")
 
     response = await llm.ainvoke(message.content)
+    print("Response from LLM:", response) # Show the different responses from the LLM
 
     # Case 1: model produced text
     if response.content:
