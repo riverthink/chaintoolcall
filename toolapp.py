@@ -14,31 +14,30 @@ def generate_patient():
 
 @cl.on_chat_start
 async def on_chat_start():
-    llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0)
-    summary_llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0).with_config({
-        "system_message": (
-            "You summarize patient information using only the data provided. "
-            "Do not add or infer any missing details."
-        )
-    })
+    def create_llm(system_message, tools=None):
+        base_llm = ChatOpenAI(model="gpt-4.1-mini", temperature=0).with_config({
+            "system_message": system_message
+        })
+        return base_llm.bind_tools(tools) if tools else base_llm
 
-    system_instruction = (
+    assistant_instruction = (
         "You are a hospital assistant. "
         "When asked about patient information, use the 'generate_patient' tool to retrieve patient records. "
     )
-    llm_with_tools = llm.bind_tools([generate_patient]).with_config({
-        "system_message": system_instruction
-    })
+    summary_instruction = (
+        "You summarize patient information using only the data provided. "
+        "Do not add or infer any missing details."
+    )
 
-    cl.user_session.set("llm", llm_with_tools)
-    cl.user_session.set("summary_llm", summary_llm)
+    cl.user_session.set("assistant_llm", create_llm(assistant_instruction, tools=[generate_patient]))
+    cl.user_session.set("summary_llm", create_llm(summary_instruction))
 
 @cl.on_message
 async def on_message(message: cl.Message):
-    llm = cl.user_session.get("llm")
+    assistant_llm = cl.user_session.get("assistant_llm")
     summary_llm = cl.user_session.get("summary_llm")
 
-    response = await llm.ainvoke(message.content)
+    response = await assistant_llm.ainvoke(message.content)
     print("Response from LLM:", response) # Show the different responses from the LLM
 
     # Case 1: model produced text
@@ -54,9 +53,8 @@ async def on_message(message: cl.Message):
         summary_text = summary_response.content or "No summary produced."
 
         await cl.Message(
-            content="From Tool:"+str(tool_output)+"\n\nSummary:"+summary_text
+            content="From Tool:\n"+str(tool_output)+"\n\nFrom Model\n:Summary:"+summary_text
         ).send()
         return
 
     await cl.Message(content="No response.").send()
-
